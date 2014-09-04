@@ -1,13 +1,12 @@
 (ns clj-tiny-rb.core
   "A very basic red-black tree implementation of an Okasaki-style left leaning red black tree
-   see: http://www.mew.org/~kazu/proj/red-black-tree/
-   - clearly a couple of orders of magnitude less efficient to create than clojure's sorted sets")
+   see: http://www.mew.org/~kazu/proj/red-black-tree/")
 
 (defrecord Node [color left val right])
 
 (defn red?
-  [node]
-  (= :red (:color node)))
+  [^Node node]
+  (and node (= :red (.color node))))
 
 (defn black?
   [node]
@@ -26,49 +25,49 @@
   (assoc node :color :black))
 
 (defn balancel
-  [{:keys [left val right] :as node}]
-  (if (and (black? node)
+  [color ^Node left val right]
+  (if (and (= :black color)
            (red? left)
-           (red? (:left left)))
-    (let [lleft (:left left)
-          lval (:val left)
-          lright (:right left)]
+           (red? (.left left)))
+    (let [lleft (.left left)
+          lval (.val left)
+          lright (.right left)]
       (red
         (make-black lleft)
         lval
         (black lright
                val
                right)))
-    node))
+    (->Node color left val right)))
 
 (defn balancer
-  [{:keys [color left val right] :as node}]
+  [color left val ^Node right]
   (cond
-    (and (black? node)
+    (and (= :black color)
          (red? left)
          (red? right)) (red (make-black left)
                             val
-                            (make-black left))
+                            (make-black right))
     (red? right) (->Node color
-                         (red left val (:left right))
-                         (:val right)
-                         (:right right))
-    :else node))
+                         (red left val (.left right))
+                         (.val right)
+                         (.right right))
+    :else (->Node color left val right)))
 
-(declare insert-seq)
-
+(defn- insert*
+  [^Node node val]
+  (if-not node
+    (red nil val nil)
+    (case (compare val (.val node))
+      -1 (balancel (.color node) (insert* (.left node) val) (.val node) (.right node))
+      1 (balancer (.color node) (.left node) (.val node) (insert* (.right node) val))
+      0 node)))
 
 (defn insert
   ([node val]
-   (cond
-     (nil? node) (red nil val nil)
-     :else
-     (case (compare val (:val node))
-       -1 (balancel (assoc node :left (insert (:left node) val)))
-       1 (balancer (assoc node :right (insert (:right node) val)))
-       0 node)))
+   (make-black (insert* node val)))
   ([node val & vals]
-   (insert-seq node (cons val vals))))
+   (reduce insert node (cons val vals))))
 
 (defn insert-seq
   [rb coll]
@@ -83,11 +82,11 @@
               (rb->seq (:right node)))))
 
 (defn find-val
-  [node val]
+  [^Node node val]
   (when node
-    (case (compare val (:val node))
-      -1 (recur (:left node) val)
-      1 (recur (:right node) val)
+    (case (compare val (.val node))
+      -1 (recur (.left node) val)
+      1 (recur (.right node) val)
       0 val)))
 
 (deftype Tree [node]
